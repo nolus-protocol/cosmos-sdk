@@ -33,7 +33,11 @@ const (
 	FlagSummary      = "summary"
 	// Deprecated: only used for v1beta1 legacy proposals.
 	FlagProposal = "proposal"
+	FlagValidate = "validate"
 )
+
+// validate will be used to enforce optional validation of a proposal(like it was as in v0.45)
+var validate bool
 
 // ProposalFlags defines the core required fields of a legacy proposal. It is used to
 // verify that these values are not provided in conjunction with a JSON proposal
@@ -136,16 +140,24 @@ metadata example:
 				return err
 			}
 
-			msg, err := v1.NewMsgSubmitProposal(msgs, deposit, clientCtx.GetFromAddress().String(), metadata, title, summary)
-			if err != nil {
-				return fmt.Errorf("invalid message: %w", err)
-			}
+			var msg sdk.Msg
+			if validate {
+				msg, err = v1.NewMsgSubmitProposalCheck(msgs, deposit, clientCtx.GetFromAddress().String(), metadata, title, summary)
+				if err != nil {
+					return fmt.Errorf("invalid message: %w", err)
+				}
+			} else {
+				msg, err = v1.NewMsgSubmitProposal(msgs, deposit, clientCtx.GetFromAddress().String(), metadata, title, summary)
+				if err != nil {
+					return fmt.Errorf("invalid message: %w", err)
+				}
 
 			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
 		},
 	}
 
 	flags.AddTxFlagsToCmd(cmd)
+	cmd.Flags().BoolVar(&validate, FlagValidate, true, "Validate enforces proposal to have valid message parameter values")
 
 	return cmd
 }
