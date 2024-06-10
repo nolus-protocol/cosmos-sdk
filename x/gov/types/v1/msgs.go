@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	_, _, _, _, _, _, _ sdk.Msg                            = &MsgSubmitProposal{}, &MsgDeposit{}, &MsgVote{}, &MsgVoteWeighted{}, &MsgExecLegacyContent{}, &MsgUpdateParams{}, &MsgCancelProposal{}
-	_, _                codectypes.UnpackInterfacesMessage = &MsgSubmitProposal{}, &MsgExecLegacyContent{}
+	_, _, _, _, _, _, _, _ sdk.Msg                            = &MsgSubmitProposal{}, &MsgDeposit{}, &MsgVote{}, &MsgVoteWeighted{}, &MsgExecLegacyContent{}, &MsgUpdateParams{}, &MsgCancelProposal{}, &MsgSubmitProposalWithValidation{}
+	_, _                   codectypes.UnpackInterfacesMessage = &MsgSubmitProposal{}, &MsgExecLegacyContent{}
 )
 
 // NewMsgSubmitProposal creates a new MsgSubmitProposal.
@@ -57,6 +57,54 @@ func (m *MsgSubmitProposal) SetMsgs(msgs []sdk.Msg) error {
 
 // UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
 func (m MsgSubmitProposal) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
+	return sdktx.UnpackInterfaces(unpacker, m.Messages)
+}
+
+// NewMsgSubmitProposalWithValidation creates a new MsgSubmitProposalWithValidation.
+func NewMsgSubmitProposalWithValidation(
+	messages []sdk.Msg,
+	initialDeposit sdk.Coins,
+	proposer, metadata, title, summary string,
+	expedited bool,
+) (*MsgSubmitProposalWithValidation, error) {
+	m := &MsgSubmitProposalWithValidation{
+		InitialDeposit: initialDeposit,
+		Proposer:       proposer,
+		Metadata:       metadata,
+		Title:          title,
+		Summary:        summary,
+		Expedited:      expedited,
+	}
+
+	anys, err := sdktx.SetMsgs(messages)
+	if err != nil {
+		return nil, err
+	}
+
+	m.Messages = anys
+
+	return m, nil
+}
+
+// GetMsgs unpacks m.Messages Any's into sdk.Msg's
+func (m *MsgSubmitProposalWithValidation) GetMsgs() ([]sdk.Msg, error) {
+	return sdktx.GetMsgs(m.Messages, "sdk.MsgProposal")
+}
+
+// SetMsgs packs sdk.Msg's into m.Messages Any's
+// NOTE: this will overwrite any existing messages
+func (m *MsgSubmitProposalWithValidation) SetMsgs(msgs []sdk.Msg) error {
+	anys, err := sdktx.SetMsgs(msgs)
+	if err != nil {
+		return err
+	}
+
+	m.Messages = anys
+	return nil
+}
+
+// UnpackInterfaces implements UnpackInterfacesMessage.UnpackInterfaces
+func (m MsgSubmitProposalWithValidation) UnpackInterfaces(unpacker codectypes.AnyUnpacker) error {
 	return sdktx.UnpackInterfaces(unpacker, m.Messages)
 }
 

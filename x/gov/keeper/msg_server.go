@@ -118,6 +118,97 @@ func (k msgServer) SubmitProposal(goCtx context.Context, msg *v1.MsgSubmitPropos
 	}, nil
 }
 
+// SubmitProposalWithValidation implements the MsgServer.SubmitProposalWithValidation method.
+func (k msgServer) SubmitProposalWithValidation(goCtx context.Context, msg *v1.MsgSubmitProposalWithValidation) (*v1.MsgSubmitProposalWithValidationResponse, error) {
+	if msg.Title == "" {
+		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "proposal title cannot be empty")
+	}
+	if msg.Summary == "" {
+		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "proposal summary cannot be empty")
+	}
+
+	proposer, err := k.authKeeper.AddressCodec().StringToBytes(msg.GetProposer())
+	if err != nil {
+		return nil, sdkerrors.ErrInvalidAddress.Wrapf("invalid proposer address: %s", err)
+	}
+
+	// check that either metadata or Msgs length is non nil.
+	if len(msg.Messages) == 0 && len(msg.Metadata) == 0 {
+		return nil, errors.Wrap(govtypes.ErrNoProposalMsgs, "either metadata or Msgs length must be non-nil")
+	}
+
+	// verify that if present, the metadata title and summary equals the proposal title and summary
+	if len(msg.Metadata) != 0 {
+		proposalMetadata := govtypes.ProposalMetadata{}
+		if err := json.Unmarshal([]byte(msg.Metadata), &proposalMetadata); err == nil {
+			if proposalMetadata.Title != msg.Title {
+				return nil, errors.Wrapf(govtypes.ErrInvalidProposalContent, "metadata title '%s' must equal proposal title '%s'", proposalMetadata.Title, msg.Title)
+			}
+
+			if proposalMetadata.Summary != msg.Summary {
+				return nil, errors.Wrapf(govtypes.ErrInvalidProposalContent, "metadata summary '%s' must equal proposal summary '%s'", proposalMetadata.Summary, msg.Summary)
+			}
+		}
+
+		// if we can't unmarshal the metadata, this means the client didn't use the recommended metadata format
+		// nothing can be done here, and this is still a valid case, so we ignore the error
+	}
+
+	proposalMsgs, err := msg.GetMsgs()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	initialDeposit := msg.GetInitialDeposit()
+
+	params, err := k.Params.Get(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get governance parameters: %w", err)
+	}
+
+	if err := k.validateInitialDeposit(ctx, params, initialDeposit, msg.Expedited); err != nil {
+		return nil, err
+	}
+
+	if err := k.validateDepositDenom(ctx, params, initialDeposit); err != nil {
+		return nil, err
+	}
+
+	proposal, err := k.Keeper.SubmitProposalWithValidation(ctx, proposalMsgs, msg.Metadata, msg.Title, msg.Summary, proposer, msg.Expedited)
+	if err != nil {
+		return nil, err
+	}
+
+	bytes, err := proposal.Marshal()
+	if err != nil {
+		return nil, err
+	}
+
+	// ref: https://github.com/cosmos/cosmos-sdk/issues/9683
+	ctx.GasMeter().ConsumeGas(
+		3*ctx.KVGasConfig().WriteCostPerByte*uint64(len(bytes)),
+		"submit proposal",
+	)
+
+	votingStarted, err := k.Keeper.AddDeposit(ctx, proposal.Id, proposer, msg.GetInitialDeposit())
+	if err != nil {
+		return nil, err
+	}
+
+	if votingStarted {
+		ctx.EventManager().EmitEvent(
+			sdk.NewEvent(govtypes.EventTypeSubmitProposal,
+				sdk.NewAttribute(govtypes.AttributeKeyVotingPeriodStart, fmt.Sprintf("%d", proposal.Id)),
+			),
+		)
+	}
+
+	return &v1.MsgSubmitProposalWithValidationResponse{
+		ProposalId: proposal.Id,
+	}, nil
+}
+
 // CancelProposal implements the MsgServer.CancelProposal method.
 func (k msgServer) CancelProposal(goCtx context.Context, msg *v1.MsgCancelProposal) (*v1.MsgCancelProposalResponse, error) {
 	_, err := k.authKeeper.AddressCodec().StringToBytes(msg.Proposer)
