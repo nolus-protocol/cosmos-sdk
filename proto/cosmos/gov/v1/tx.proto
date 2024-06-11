@@ -39,8 +39,8 @@ service Msg {
   // Since: cosmos-sdk 0.47
   rpc UpdateParams(MsgUpdateParams) returns (MsgUpdateParamsResponse);
 
-  // SubmitProposalWithValidation defines a method to create new proposal given the messages with validation as it was in sdk v0.45.
-  rpc SubmitProposalWithValidation(MsgSubmitProposalWithValidation) returns (MsgSubmitProposalWithValidationResponse);
+  // SubmitPropWValidation defines a method to create new proposal given the messages with validation as it was in sdk v0.45.
+  rpc SubmitPropWValidation(MsgSubmitPropWValidation) returns (MsgSubmitPropWValidationResponse);
 
   // CancelProposal defines a method to cancel governance proposal
   //
@@ -190,11 +190,11 @@ message MsgUpdateParams {
 // Since: cosmos-sdk 0.47
 message MsgUpdateParamsResponse {}
 
-// MsgSubmitProposalWithValidation defines an sdk.Msg type that supports submitting arbitrary
+// MsgSubmitPropWValidation defines an sdk.Msg type that supports submitting arbitrary
 // proposal Content.
-message MsgSubmitProposalWithValidation {
+message MsgSubmitPropWValidation {
   option (cosmos.msg.v1.signer) = "proposer";
-  option (amino.name)           = "cosmos-sdk/v1/MsgSubmitProposalWithValidation";
+  option (amino.name)           = "cosmos-sdk/v1/MsgSubmitPropWValidation";
 
   // messages are the arbitrary messages to be executed if proposal passes.
   repeated google.protobuf.Any messages             = 1;
@@ -224,8 +224,8 @@ message MsgSubmitProposalWithValidation {
   bool expedited = 7;
 }
 
-// MsgSubmitProposalWithValidationResponse defines the Msg/SubmitProposalWithValidation response type.
-message MsgSubmitProposalWithValidationResponse {
+// MsgSubmitPropWValidationResponse defines the Msg/SubmitPropWValidation response type.
+message MsgSubmitPropWValidationResponse {
   // proposal_id defines the unique id of the proposal.
   uint64 proposal_id = 1;
 }

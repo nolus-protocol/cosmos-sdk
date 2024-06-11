@@ -131,8 +131,8 @@ func (keeper Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, met
 	return proposal, nil
 }
 
-// SubmitProposalWithValidation creates a new proposal given an array of messages with validation as it was in sdk v0.45
-func (keeper Keeper) SubmitProposalWithValidation(ctx context.Context, messages []sdk.Msg, metadata, title, summary string, proposer sdk.AccAddress, expedited bool) (v1.Proposal, error) {
+// SubmitPropWValidation creates a new proposal given an array of messages with validation as it was in sdk v0.45
+func (keeper Keeper) SubmitPropWValidation(ctx context.Context, messages []sdk.Msg, metadata, title, summary string, proposer sdk.AccAddress, expedited bool) (v1.Proposal, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	err := keeper.assertMetadataLength(metadata)
 	if err != nil {

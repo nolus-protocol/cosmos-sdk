@@ -173,7 +173,7 @@ func (suite *KeeperTestSuite) TestSubmitProposal() {
 	}
 }
 
-func (suite *KeeperTestSuite) TestSubmitProposalWithValidation() {
+func (suite *KeeperTestSuite) TestSubmitPropWValidation() {
 	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
 	_, _, randomAddr := testdata.KeyTestPubAddr()
 	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
@@ -203,7 +203,7 @@ func (suite *KeeperTestSuite) TestSubmitProposalWithValidation() {
 	for i, tc := range testCases {
 		prop, err := v1.NewLegacyContent(tc.content, tc.authority)
 		suite.Require().NoError(err)
-		_, err = suite.govKeeper.SubmitProposalWithValidation(suite.ctx, []sdk.Msg{prop}, tc.metadata, "title", "", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), tc.expedited)
+		_, err = suite.govKeeper.SubmitPropWValidation(suite.ctx, []sdk.Msg{prop}, tc.metadata, "title", "", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), tc.expedited)
 		suite.Require().True(errors.Is(tc.expectedErr, err), "tc #%d; got: %v, expected: %v", i, err, tc.expectedErr)
 	}
 }

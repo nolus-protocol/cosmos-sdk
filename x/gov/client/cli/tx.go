@@ -144,7 +144,7 @@ metadata example:
 
 			var msg sdk.Msg
 			if validate {
-				msg, err = v1.NewMsgSubmitProposalWithValidation(msgs, deposit, clientCtx.GetFromAddress().String(), proposal.Metadata, proposal.Title, proposal.Summary, proposal.Expedited)
+				msg, err = v1.NewMsgSubmitPropWValidation(msgs, deposit, clientCtx.GetFromAddress().String(), proposal.Metadata, proposal.Title, proposal.Summary, proposal.Expedited)
 				if err != nil {
 					return fmt.Errorf("invalid message: %w", err)
 				}

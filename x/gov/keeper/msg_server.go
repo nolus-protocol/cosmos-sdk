@@ -118,8 +118,8 @@ func (k msgServer) SubmitProposal(goCtx context.Context, msg *v1.MsgSubmitPropos
 	}, nil
 }
 
-// SubmitProposalWithValidation implements the MsgServer.SubmitProposalWithValidation method.
-func (k msgServer) SubmitProposalWithValidation(goCtx context.Context, msg *v1.MsgSubmitProposalWithValidation) (*v1.MsgSubmitProposalWithValidationResponse, error) {
+// SubmitPropWValidation implements the MsgServer.SubmitPropWValidation method.
+func (k msgServer) SubmitPropWValidation(goCtx context.Context, msg *v1.MsgSubmitPropWValidation) (*v1.MsgSubmitPropWValidationResponse, error) {
 	if msg.Title == "" {
 		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "proposal title cannot be empty")
 	}
@@ -175,7 +175,7 @@ func (k msgServer) SubmitProposalWithValidation(goCtx context.Context, msg *v1.M
 		return nil, err
 	}
 
-	proposal, err := k.Keeper.SubmitProposalWithValidation(ctx, proposalMsgs, msg.Metadata, msg.Title, msg.Summary, proposer, msg.Expedited)
+	proposal, err := k.Keeper.SubmitPropWValidation(ctx, proposalMsgs, msg.Metadata, msg.Title, msg.Summary, proposer, msg.Expedited)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func (k msgServer) SubmitProposalWithValidation(goCtx context.Context, msg *v1.M
 		)
 	}
 
-	return &v1.MsgSubmitProposalWithValidationResponse{
+	return &v1.MsgSubmitPropWValidationResponse{
 		ProposalId: proposal.Id,
 	}, nil
 }
