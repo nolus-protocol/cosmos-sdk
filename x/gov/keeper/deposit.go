@@ -79,7 +79,12 @@ func (keeper Keeper) AddDeposit(ctx context.Context, proposalID uint64, deposito
 	}
 
 	minDepositAmount := proposal.GetMinDepositFromParams(params)
-	minDepositRatio, err := sdkmath.LegacyNewDecFromStr(params.GetMinDepositRatio())
+	minDepositRatioStr := params.GetMinDepositRatio()
+	if minDepositRatioStr == "" {
+		minDepositRatioStr = v1.DefaultMinDepositRatio.String()
+	}
+
+	minDepositRatio, err := sdkmath.LegacyNewDecFromStr(minDepositRatioStr)
 	if err != nil {
 		return false, err
 	}
