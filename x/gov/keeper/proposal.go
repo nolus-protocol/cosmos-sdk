@@ -131,6 +131,100 @@ func (keeper Keeper) SubmitProposal(ctx context.Context, messages []sdk.Msg, met
 	return proposal, nil
 }
 
+// SubmitPropWValidation creates a new proposal given an array of messages with validation as it was in sdk v0.45
+func (keeper Keeper) SubmitPropWValidation(ctx context.Context, messages []sdk.Msg, metadata, title, summary string, proposer sdk.AccAddress, expedited bool) (v1.Proposal, error) {
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	err := keeper.assertMetadataLength(metadata)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	// assert summary is no longer than predefined max length of metadata
+	err = keeper.assertSummaryLength(summary)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	// assert title is no longer than predefined max length of metadata
+	err = keeper.assertMetadataLength(title)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	// Will hold a comma-separated string of all Msg type URLs.
+	msgsStr := ""
+	// Loop through all messages and confirm that each has a handler and the gov module account
+	// as the only signer
+	for _, msg := range messages {
+		msgsStr += fmt.Sprintf(",%s", sdk.MsgTypeURL(msg))
+		// perform a basic validation of the message
+		if m, ok := msg.(sdk.HasValidateBasic); ok {
+			if err := m.ValidateBasic(); err != nil {
+				return v1.Proposal{}, errorsmod.Wrap(types.ErrInvalidProposalMsg, err.Error())
+			}
+		}
+		signers, _, err := keeper.cdc.GetMsgV1Signers(msg)
+		if err != nil {
+			return v1.Proposal{}, err
+		}
+		if len(signers) != 1 {
+			return v1.Proposal{}, types.ErrInvalidSigner
+		}
+		// assert that the governance module account is the only signer of the messages
+		if !bytes.Equal(signers[0], keeper.GetGovernanceAccount(ctx).GetAddress()) {
+			return v1.Proposal{}, errorsmod.Wrapf(types.ErrInvalidSigner, sdk.AccAddress(signers[0]).String())
+		}
+		// use the msg service router to see that there is a valid route for that message.
+		handler := keeper.router.Handler(msg)
+		if handler == nil {
+			return v1.Proposal{}, errorsmod.Wrap(types.ErrUnroutableProposalMsg, sdk.MsgTypeURL(msg))
+		}
+		// Execute the proposal content in a new context branch (with branched store)
+		// to validate the actual parameter changes before the proposal proceeds
+		// through the governance process. State is not persisted.
+		cacheCtx, _ := sdkCtx.CacheContext()
+		if _, err := handler(cacheCtx, msg); err != nil {
+			if errors.Is(types.ErrNoProposalHandlerExists, err) {
+				return v1.Proposal{}, err
+			}
+			return v1.Proposal{}, errorsmod.Wrap(types.ErrInvalidProposalContent, err.Error())
+		}
+	}
+	proposalID, err := keeper.ProposalID.Next(ctx)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	params, err := keeper.Params.Get(ctx)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	submitTime := sdkCtx.BlockHeader().Time
+	depositPeriod := params.MaxDepositPeriod
+	proposal, err := v1.NewProposal(messages, proposalID, submitTime, submitTime.Add(*depositPeriod), metadata, title, summary, proposer, expedited)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	err = keeper.SetProposal(ctx, proposal)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	err = keeper.InactiveProposalsQueue.Set(ctx, collections.Join(*proposal.DepositEndTime, proposalID), proposalID)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	// called right after a proposal is submitted
+	err = keeper.Hooks().AfterProposalSubmission(ctx, proposalID)
+	if err != nil {
+		return v1.Proposal{}, err
+	}
+	sdkCtx.EventManager().EmitEvent(
+		sdk.NewEvent(
+			types.EventTypeSubmitProposal,
+			sdk.NewAttribute(types.AttributeKeyProposalID, fmt.Sprintf("%d", proposalID)),
+			sdk.NewAttribute(types.AttributeKeyProposalProposer, proposer.String()),
+			sdk.NewAttribute(types.AttributeKeyProposalMessages, msgsStr),
+		),
+	)
+	return proposal, nil
+}
+
 // CancelProposal will cancel proposal before the voting period ends
 func (keeper Keeper) CancelProposal(ctx context.Context, proposalID uint64, proposer string) error {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
