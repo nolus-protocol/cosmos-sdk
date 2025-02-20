@@ -150,6 +150,10 @@ func (keeper Keeper) SubmitPropWValidation(ctx context.Context, messages []sdk.M
 	}
 	// Will hold a comma-separated string of all Msg type URLs.
 	msgsStr := ""
+	// Create a new context branch to simulate the execution of each proposal message
+	// before the proposal is submitted to the governance store.
+	// This is done to ensure that the proposal content is valid and will not fail. This state will not be persisted.
+	cacheCtx, _ := sdkCtx.CacheContext()
 	// Loop through all messages and confirm that each has a handler and the gov module account
 	// as the only signer
 	for _, msg := range messages {
@@ -179,7 +183,6 @@ func (keeper Keeper) SubmitPropWValidation(ctx context.Context, messages []sdk.M
 		// Execute the proposal content in a new context branch (with branched store)
 		// to validate the actual parameter changes before the proposal proceeds
 		// through the governance process. State is not persisted.
-		cacheCtx, _ := sdkCtx.CacheContext()
 		if _, err := handler(cacheCtx, msg); err != nil {
 			if errors.Is(types.ErrNoProposalHandlerExists, err) {
 				return v1.Proposal{}, err
