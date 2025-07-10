@@ -178,6 +178,9 @@ func QueryProposerByTxQuery(clientCtx client.Context, proposalID uint64) (Propos
 			if subMsg, ok := msg.(*v1.MsgSubmitProposal); ok {
 				return NewProposer(proposalID, subMsg.Proposer), nil
 			}
+			if subMsg, ok := msg.(*v1.MsgSubmitPropWValidation); ok {
+				return NewProposer(proposalID, subMsg.Proposer), nil
+			}
 		}
 	}
 

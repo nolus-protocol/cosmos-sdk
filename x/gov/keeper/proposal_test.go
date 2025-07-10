@@ -173,6 +173,103 @@ func (suite *KeeperTestSuite) TestSubmitProposal() {
 	}
 }
 
+func (suite *KeeperTestSuite) TestSubmitPropWValidation() {
+	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
+	_, _, randomAddr := testdata.KeyTestPubAddr()
+	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
+	testCases := []struct {
+		content     v1beta1.Content
+		authority   string
+		metadata    string
+		expedited   bool
+		expectedErr error
+	}{
+		{&tp, govAcct, "", false, nil},
+		{&tp, govAcct, "", true, nil},
+		// Keeper does not check the validity of title and description, no error
+		{&v1beta1.TextProposal{Title: "", Description: "description"}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: strings.Repeat("1234567890", 100), Description: "description"}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: "title", Description: ""}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: "title", Description: strings.Repeat("1234567890", 1000)}, govAcct, "", true, nil},
+		// error when metadata is too long (>10000)
+		{&tp, govAcct, strings.Repeat("a", 100001), true, types.ErrMetadataTooLong},
+		// error when signer is not gov acct
+		{&tp, randomAddr.String(), "", false, types.ErrInvalidSigner},
+		// error only when invalid route
+		{&invalidProposalRoute{}, govAcct, "", false, types.ErrNoProposalHandlerExists},
+	}
+	for i, tc := range testCases {
+		prop, err := v1.NewLegacyContent(tc.content, tc.authority)
+		suite.Require().NoError(err)
+		_, err = suite.govKeeper.SubmitPropWValidation(suite.ctx, []sdk.Msg{prop}, tc.metadata, "title", "", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), tc.expedited)
+		suite.Require().True(errors.Is(tc.expectedErr, err), "tc #%d; got: %v, expected: %v", i, err, tc.expectedErr)
+	}
+}
+
+func (suite *KeeperTestSuite) TestSubmitPropWValidationMultipleMsgs() {
+	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
+	_, _, randomAddr := testdata.KeyTestPubAddr()
+	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
+	testCases := []struct {
+		msg1        v1beta1.Content
+		authority   string
+		metadata    string
+		expedited   bool
+		expectedErr error
+	}{
+		// Keeper does not check the validity of title and description, no error
+		{&v1beta1.TextProposal{Title: "", Description: "description"}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: strings.Repeat("1234567890", 100), Description: "description"}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: "title", Description: ""}, govAcct, "", false, nil},
+		{&v1beta1.TextProposal{Title: "title", Description: strings.Repeat("1234567890", 1000)}, govAcct, "", true, nil},
+		// error when metadata is too long (>10000)
+		{&tp, govAcct, strings.Repeat("a", 100001), true, types.ErrMetadataTooLong},
+		// error when signer is not gov acct
+		{&tp, randomAddr.String(), "", false, types.ErrInvalidSigner},
+		// error only when invalid route
+		{&invalidProposalRoute{}, govAcct, "", false, types.ErrNoProposalHandlerExists},
+	}
+	for i, tc := range testCases {
+		prop1, err := v1.NewLegacyContent(tc.msg1, tc.authority)
+		suite.Require().NoError(err)
+		_, err = suite.govKeeper.SubmitPropWValidation(suite.ctx, []sdk.Msg{prop1}, tc.metadata, "title", "", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), tc.expedited)
+		suite.Require().True(errors.Is(tc.expectedErr, err), "tc #%d; got: %v, expected: %v", i, err, tc.expectedErr)
+	}
+}
+
+// TestSubmitPropWValidationWithLotsOfMessages tests to execute the same message a lot of times.
+// Actual limit is 100 messages per proposal, but this test is to check the performance. The tested messages are relatively simple - update params.
+// Manually checked gas consumed and it is - 1781280. For comparison, 3 of these messages take around 38340 of gas.
+// If we submit a proposal with more complicated messages, this would take a lot of gas and might slow down/crash the node but it's better to catch it on submission
+// rather than on execution when all of the nodes will be affected.
+func (suite *KeeperTestSuite) TestSubmitPropWValidationWithLotsOfMessages() {
+	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
+
+	msg := &v1.MsgUpdateParams{Authority: govAcct, Params: v1.DefaultParams()}
+	_, err := suite.govKeeper.SubmitPropWValidation(suite.ctx, []sdk.Msg{msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg,
+		msg, msg, msg, msg, msg, msg, msg, msg, msg, msg}, "", "title", "", sdk.AccAddress("cosmos1ghekyjucln7y67ntx7cf27m9dpuxxemn4c8g4r"), false)
+	suite.Require().NoError(err)
+}
+
 func (suite *KeeperTestSuite) TestCancelProposal() {
 	govAcct := suite.govKeeper.GetGovernanceAccount(suite.ctx).GetAddress().String()
 	tp := v1beta1.TextProposal{Title: "title", Description: "description"}
