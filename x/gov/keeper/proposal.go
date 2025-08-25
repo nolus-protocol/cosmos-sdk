@@ -213,7 +213,7 @@ func (keeper Keeper) SubmitPropWValidation(ctx context.Context, messages []sdk.M
 		return v1.Proposal{}, err
 	}
 	// called right after a proposal is submitted
-	err = keeper.Hooks().AfterProposalSubmission(ctx, proposalID)
+	err = keeper.Hooks().AfterProposalSubmission(ctx, proposalID, proposer)
 	if err != nil {
 		return v1.Proposal{}, err
 	}
