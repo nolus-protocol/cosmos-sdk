@@ -52,6 +52,31 @@ enum SignMode {
   //
   // Since: cosmos-sdk 0.45.2
   SIGN_MODE_EIP_191 = 191;
+
+  // SIGN_MODE_SOLANA_OFFCHAIN specifies the sign mode for Solana wallets that
+  // expose solana:signOffchainMessage. The sign bytes are the sRFC-38 v1
+  // offchain-message envelope over the transaction's canonical amino JSON,
+  // verified against the signer's ed25519 public key.
+  //
+  // SIGN_MODE_SOLANA_OFFCHAIN is registered as a SignMode enum variant but is
+  // not implemented on the SDK by default; the application supplies its
+  // `SignModeHandler` through a custom `TxConfig`.
+  //
+  // Since: cosmos-sdk 0.53.3-nolus-4
+  SIGN_MODE_SOLANA_OFFCHAIN = 192;
+
+  // SIGN_MODE_SOLANA_TX_CARRIER specifies the sign mode for Solana wallets that
+  // can only sign transactions. The wallet-signed Solana legacy message, which
+  // carries the transaction's canonical amino JSON in an SPL Memo instruction,
+  // is included in the transaction and verified verbatim against the signer's
+  // ed25519 public key.
+  //
+  // SIGN_MODE_SOLANA_TX_CARRIER is registered as a SignMode enum variant but is
+  // not implemented on the SDK by default; the application supplies its
+  // `SignModeHandler` through a custom `TxConfig`.
+  //
+  // Since: cosmos-sdk 0.53.3-nolus-4
+  SIGN_MODE_SOLANA_TX_CARRIER = 193;
 }
 
 // SignatureDescriptors wraps multiple SignatureDescriptor's.
