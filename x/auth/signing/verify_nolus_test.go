@@ -1,23 +1,21 @@
 package signing
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	signingv1beta1 "cosmossdk.io/api/cosmos/tx/signing/v1beta1"
 	txsigning "cosmossdk.io/x/tx/signing"
 
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/types/tx/signing"
-)
-
-// The pulsar-side enum lives in cosmossdk.io/api, which is not forked, so the API-side
-// values are numeric casts of the same wire numbers the fork adds to signing.proto.
-const (
-	apiSignModeSolanaOffchain  = signingv1beta1.SignMode(192)
-	apiSignModeSolanaTxCarrier = signingv1beta1.SignMode(193)
 )
 
 type stubSignModeHandler struct {
@@ -90,8 +88,8 @@ func TestAPISignModeToInternalAcceptsSolanaModes(t *testing.T) {
 		api  signingv1beta1.SignMode
 		want signing.SignMode
 	}{
-		{"solana offchain", apiSignModeSolanaOffchain, signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
-		{"solana tx carrier", apiSignModeSolanaTxCarrier, signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
+		{"solana offchain", signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
+		{"solana tx carrier", signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
 	}
 
 	for _, tc := range tests {
@@ -109,8 +107,8 @@ func TestInternalSignModeToAPIAcceptsSolanaModes(t *testing.T) {
 		internal signing.SignMode
 		want     signingv1beta1.SignMode
 	}{
-		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, apiSignModeSolanaOffchain},
-		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, apiSignModeSolanaTxCarrier},
+		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
+		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
 	}
 
 	for _, tc := range tests {
@@ -149,7 +147,7 @@ func TestAPISignModeToInternalRejectsUnknownModes(t *testing.T) {
 	}{
 		{"unspecified", signingv1beta1.SignMode_SIGN_MODE_UNSPECIFIED},
 		{"below solana offchain", signingv1beta1.SignMode(190)},
-		{"between solana modes and nothing", signingv1beta1.SignMode(194)},
+		{"above solana tx carrier", signingv1beta1.SignMode(194)},
 		{"far out of range", signingv1beta1.SignMode(9999)},
 	}
 
@@ -188,8 +186,8 @@ func TestVerifySignatureAcceptsSolanaModeEd25519Signature(t *testing.T) {
 		internal signing.SignMode
 		api      signingv1beta1.SignMode
 	}{
-		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, apiSignModeSolanaOffchain},
-		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, apiSignModeSolanaTxCarrier},
+		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
+		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
 	}
 
 	for _, tc := range tests {
@@ -221,8 +219,8 @@ func TestVerifySignatureRejectsSolanaModeSignatureOverOtherBytes(t *testing.T) {
 		internal signing.SignMode
 		api      signingv1beta1.SignMode
 	}{
-		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, apiSignModeSolanaOffchain},
-		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, apiSignModeSolanaTxCarrier},
+		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
+		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
 	}
 
 	for _, tc := range tests {
@@ -254,8 +252,8 @@ func TestVerifySignatureRejectsSolanaModeSignatureFromOtherKey(t *testing.T) {
 		internal signing.SignMode
 		api      signingv1beta1.SignMode
 	}{
-		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, apiSignModeSolanaOffchain},
-		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, apiSignModeSolanaTxCarrier},
+		{"solana offchain", signing.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN},
+		{"solana tx carrier", signing.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER},
 	}
 
 	for _, tc := range tests {
@@ -278,4 +276,45 @@ func TestVerifySignatureRejectsSolanaModeSignatureFromOtherKey(t *testing.T) {
 			require.Error(t, err, "a signature from a different key must not verify")
 		})
 	}
+}
+
+func TestSolanaSignModeAPIWireNumbers(t *testing.T) {
+	tests := []struct {
+		name string
+		mode signingv1beta1.SignMode
+		want int32
+	}{
+		{"solana offchain", signingv1beta1.SignMode_SIGN_MODE_SOLANA_OFFCHAIN, 192},
+		{"solana tx carrier", signingv1beta1.SignMode_SIGN_MODE_SOLANA_TX_CARRIER, 193},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, int32(tc.mode), "the pulsar enum must carry the same wire number as the gogo enum")
+		})
+	}
+}
+
+// The gogo and pulsar descriptors are generated from the same .proto but live in
+// separately tagged modules; the hybrid resolver silently prefers the pulsar copy on
+// mismatch, so drift between them surfaces nowhere else.
+func TestSolanaSignModeDescriptorsAgree(t *testing.T) {
+	gz, path := signing.SignMode(0).EnumDescriptor()
+	zr, err := gzip.NewReader(bytes.NewReader(gz))
+	require.NoError(t, err)
+	raw, err := io.ReadAll(zr)
+	require.NoError(t, err)
+	var fd descriptorpb.FileDescriptorProto
+	require.NoError(t, proto.Unmarshal(raw, &fd))
+	gogoValues := fd.EnumType[path[0]].GetValue()
+
+	pulsarValues := signingv1beta1.SignMode(0).Descriptor().Values()
+	require.Equal(t, pulsarValues.Len(), len(gogoValues), "gogo and pulsar SignMode descriptors must be regenerated together")
+	for i, gogoValue := range gogoValues {
+		pulsarValue := pulsarValues.Get(i)
+		require.Equal(t, string(pulsarValue.Name()), gogoValue.GetName())
+		require.Equal(t, int32(pulsarValue.Number()), gogoValue.GetNumber())
+	}
+	require.NotNil(t, pulsarValues.ByNumber(192), "SIGN_MODE_SOLANA_OFFCHAIN missing from the descriptor")
+	require.NotNil(t, pulsarValues.ByNumber(193), "SIGN_MODE_SOLANA_TX_CARRIER missing from the descriptor")
 }
